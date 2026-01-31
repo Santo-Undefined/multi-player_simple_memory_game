@@ -4,12 +4,8 @@ const listener = await Deno.listen({
   transport: "tcp",
 });
 
-// listener.accept();
-// listener.
-
 const getPlayers = async (listener, playerCount = 4) => {
   const players = [];
-
   for (let index = 0; index < playerCount; index++) {
     const player = await listener.accept();
     player.write(
@@ -18,6 +14,28 @@ const getPlayers = async (listener, playerCount = 4) => {
     players.push(player);
   }
   listener.close();
+  return players;
 };
 
-await getPlayers(listener);
+const main = async () => {
+  const players = await getPlayers(listener);
+  const buf = new Uint8Array(100);
+  let nowPlaying = 0;
+
+  console.log("in the loop");
+  while (true) {
+    // get one player input
+    await players[nowPlaying].read(buf);
+    console.log("read player", nowPlaying);
+
+    // write to other players
+    for (let index = 1; index < players.length; index++) {
+      await players[(nowPlaying + index) % players.length].write(buf);
+      console.log("written to ", (nowPlaying + index) % players.length);
+    }
+
+    nowPlaying = ++nowPlaying % players.length;
+  }
+};
+
+await main();
