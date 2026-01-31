@@ -30,8 +30,9 @@ const main = async () => {
 
     // write to other players
     for (let index = 1; index < players.length; index++) {
-      await players[(nowPlaying + index) % players.length].write(buf);
-      console.log("written to ", (nowPlaying + index) % players.length);
+      const playerToWrtie = (nowPlaying + index) % players.length;
+      await players[playerToWrtie].write(buf);
+      console.log("written to ", playerToWrtie);
     }
 
     nowPlaying = ++nowPlaying % players.length;
