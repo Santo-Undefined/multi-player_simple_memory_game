@@ -1,4 +1,6 @@
 const ENCODER = new TextEncoder();
+const DECODER = new TextDecoder();
+// const
 
 const broadcastToOtherPlayers = async (players, ignorePlayer, buffer) => {
   for (let index = 0; index < players.length; index++) {
@@ -9,25 +11,49 @@ const broadcastToOtherPlayers = async (players, ignorePlayer, buffer) => {
 };
 
 const broadcastToAllPlayers = async (players, announcement) => {
-  const message = ENCODER.encode(announcement);
   for (const player of players) {
-    await player.write(message);
+    await player.write(announcement);
   }
+};
+
+const encodeMessage = (message) => {
+  const toBeEncoded = {
+    talk: false,
+    previousAnswer: "",
+    message: message,
+  };
+
+  const messageJson = JSON.stringify(toBeEncoded);
+  return ENCODER.encode(messageJson);
 };
 
 const getPlayers = async (listener, playerCount = 4) => {
   const players = [];
   for (let index = 0; index < playerCount; index++) {
     const player = await listener.accept();
-    player.write(
-      new TextEncoder().encode(
-        `Welcome to the game, your Id ${index}, wait for others\n`,
-      ),
+    await player.write(
+      encodeMessage(`Welcome to the game, your Id ${index}\n`),
     );
     players.push(player);
   }
   listener.close();
   return players;
+};
+
+const readPlayer = async (player, previousAnswer = "") => {
+  const message = {
+    talk: true,
+    previousAnswer: previousAnswer,
+  };
+  const encodedMessage = ENCODER.encode(JSON.stringify(message));
+  await player.write(encodedMessage);
+  const buffer = new Uint8Array(4096);
+  const n = await player.read(buffer);
+
+  const decodeMessage = DECODER.decode(new Uint8Array(buffer.slice(0, n)));
+  const jsonFormat = JSON.parse(decodeMessage);
+  // console.log(jsonFormat);
+  return buffer.slice(0, n);
 };
 
 const listener = await Deno.listen({
@@ -38,30 +64,27 @@ const listener = await Deno.listen({
 
 const main = async () => {
   const players = await getPlayers(listener, 2);
-  const buf = new Uint8Array(100);
+  // const buf = new Uint8Array(100);
   let nowPlaying = 0;
 
-  await broadcastToAllPlayers(players, "Game starts now\n");
+  // await broadcastToAllPlayers(players, "Game starts now\n");
   console.log("game start");
-
+  // prompt();
   while (true) {
     // get one player input
-    await broadcastToAllPlayers(players, `wait for player ${nowPlaying} input\n`);
+    await broadcastToAllPlayers(
+      players,
+      encodeMessage(`wait for player ${nowPlaying} input\n`),
+    );
     console.log("waiting to read player", nowPlaying);
 
     // read from this player
-    await players[nowPlaying].write(ENCODER.encode("YOUTURN"));
-    const n = await players[nowPlaying].read(buf);
-
+    const buf = await readPlayer(players[nowPlaying]);
+    console.log("data from player", nowPlaying, DECODER.decode(buf));
     // write to other players
-    const messageToWrite = new Uint8Array(buf.slice(0, n));
+    const messageToWrite = new Uint8Array(buf);
+    console.log("message getting broadcasted", DECODER.decode(buf));
     await broadcastToOtherPlayers(players, nowPlaying, messageToWrite);
-
-    // for (let index = 1; index < players.length; index++) {
-    //   const playerToWrtie = (nowPlaying + index) % players.length;
-    //   await players[playerToWrtie].write(buf);
-    //   console.log("written to ", playerToWrtie);
-    // }
 
     nowPlaying = ++nowPlaying % players.length;
   }
