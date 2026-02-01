@@ -4,13 +4,17 @@ const connection = await Deno.connect({
   transport: "tcp",
 });
 
-const buf = new Uint8Array(100);
-const bytesRead = await connection.read(buf);
-
-console.log(new TextDecoder().decode(buf));
+const BUF = new Uint8Array(100);
+const DECODER = new TextDecoder();
+const ENCODER = new TextEncoder();
 
 while (true) {
-  await connection.write(new TextEncoder().encode(prompt("enter something")));
-  await connection.read(buf);
-  Deno.stdout.write(buf);
+  const n = await connection.read(BUF);
+  const encodedMessage = new Uint8Array(BUF.slice(0, n));
+  Deno.stdout.write(encodedMessage);
+  if (DECODER.decode(encodedMessage).includes("YOUTURN")) {
+    console.clear();
+    const playerInput = prompt("enter your answer ?");
+    await connection.write(ENCODER.encode(playerInput));
+  }
 }
